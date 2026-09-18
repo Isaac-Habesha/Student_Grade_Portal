@@ -18,11 +18,13 @@ export default function ProtectedRoute({ children, role }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // Redirect instructors to /instructor/login, students to /login
+    const loginPath = role === 'instructor' ? '/instructor/login' : '/login';
+    return <Navigate to={loginPath} replace />;
   }
 
   if (role && user?.role !== role) {
-    // Redirect to appropriate dashboard
+    // Redirect to appropriate dashboard if role mismatches
     const redirect = user?.role === 'instructor'
       ? '/instructor/dashboard'
       : '/student/dashboard';
@@ -31,3 +33,4 @@ export default function ProtectedRoute({ children, role }) {
 
   return children;
 }
+

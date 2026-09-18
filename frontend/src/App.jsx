@@ -40,8 +40,11 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public */}
-          <Route path="/login" element={<LoginPage />} />
+          {/* Public Login Routes */}
+          <Route path="/login" element={<LoginPage mode="student" />} />
+          <Route path="/student/login" element={<LoginPage mode="student" />} />
+          <Route path="/instructor/login" element={<LoginPage mode="instructor" />} />
+          <Route path="/instructor" element={<Navigate to="/instructor/login" replace />} />
 
           {/* Instructor Routes */}
           <Route

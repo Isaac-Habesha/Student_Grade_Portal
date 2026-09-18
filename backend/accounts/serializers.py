@@ -18,7 +18,6 @@ class InstructorLoginSerializer(serializers.Serializer):
         password = data['password']
 
         # Allow logging in with either username or email
-        user = None
         if '@' in username_input:
             try:
                 user_obj = User.objects.get(email__iexact=username_input)
@@ -39,13 +38,13 @@ class InstructorLoginSerializer(serializers.Serializer):
 
 
 class StudentLoginSerializer(serializers.Serializer):
-    """Validates student login via Student ID and Special Nickname."""
-    student_id = serializers.CharField()
-    nickname = serializers.CharField()
+    """Validates student login via Student ID and First Name."""
+    student_id = serializers.CharField(required=True)
+    first_name = serializers.CharField(required=True)
 
     def validate(self, data):
         student_id = data['student_id'].strip().upper()
-        nickname = data['nickname'].strip()
+        first_name = data['first_name'].strip()
 
         try:
             student = User.objects.get(student_id__iexact=student_id, role='student')
@@ -55,9 +54,9 @@ class StudentLoginSerializer(serializers.Serializer):
         if not student.is_active:
             raise serializers.ValidationError("This student account has been deactivated.")
 
-        # Check nickname (case-insensitive match for ease of use)
-        if not student.nickname or student.nickname.strip().lower() != nickname.lower():
-            raise serializers.ValidationError("Invalid nickname for the provided Student ID.")
+        # Check first name (case-insensitive match for convenience)
+        if not student.first_name or student.first_name.strip().lower() != first_name.lower():
+            raise serializers.ValidationError("First name does not match the record for this Student ID.")
 
         data['user'] = student
         return data
@@ -66,22 +65,22 @@ class StudentLoginSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     """
     Unified Login serializer supporting both:
-    1. Student access via (student_id, nickname)
+    1. Student access via (student_id, first_name)
     2. Instructor access via (username, password)
     """
     username = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(required=False, allow_blank=True, write_only=True)
     student_id = serializers.CharField(required=False, allow_blank=True)
-    nickname = serializers.CharField(required=False, allow_blank=True)
+    first_name = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, data):
         student_id = data.get('student_id')
-        nickname = data.get('nickname')
+        first_name = data.get('first_name')
         username = data.get('username')
         password = data.get('password')
 
-        if student_id and nickname:
-            student_serializer = StudentLoginSerializer(data={'student_id': student_id, 'nickname': nickname})
+        if student_id and first_name:
+            student_serializer = StudentLoginSerializer(data={'student_id': student_id, 'first_name': first_name})
             student_serializer.is_valid(raise_exception=True)
             data['user'] = student_serializer.validated_data['user']
             return data
@@ -91,7 +90,7 @@ class LoginSerializer(serializers.Serializer):
             data['user'] = instructor_serializer.validated_data['user']
             return data
         else:
-            raise serializers.ValidationError("Please provide either Student ID + Nickname or Username + Password.")
+            raise serializers.ValidationError("Please provide either Student ID + First Name or Username + Password.")
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -101,7 +100,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'student_id', 'nickname', 'created_at',
+            'role', 'student_id', 'photo_url', 'created_at',
         ]
         read_only_fields = fields
 
@@ -109,16 +108,19 @@ class UserSerializer(serializers.ModelSerializer):
 class CreateStudentSerializer(serializers.ModelSerializer):
     """
     Serializer for instructors to create student accounts without requiring a password.
-    Requires first_name, last_name, and nickname.
+    Requires first_name and last_name; supports optional photo_url.
     """
-    nickname = serializers.CharField(required=True, max_length=50)
+    first_name = serializers.CharField(required=True, max_length=150)
+    last_name = serializers.CharField(required=True, max_length=150)
     username = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    photo_url = serializers.CharField(required=False, allow_blank=True, max_length=500)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'nickname', 'student_id',
+            'photo_url', 'student_id',
         ]
         read_only_fields = ['id', 'student_id']
 
@@ -136,6 +138,7 @@ class CreateStudentSerializer(serializers.ModelSerializer):
         first_name = validated_data.get('first_name', '').strip()
         last_name = validated_data.get('last_name', '').strip()
         username = validated_data.get('username', '').strip()
+        photo_url = validated_data.get('photo_url', '').strip()
 
         if not username:
             base_username = f"{first_name.lower().replace(' ', '')}.{last_name.lower().replace(' ', '')}"
@@ -145,6 +148,10 @@ class CreateStudentSerializer(serializers.ModelSerializer):
                 username = f"{base_username}{counter}"
                 counter += 1
             validated_data['username'] = username
+
+        # Default avatar if photo_url is empty
+        if not photo_url:
+            validated_data['photo_url'] = f"https://api.dicebear.com/7.x/avataaars/svg?seed={first_name}{last_name}"
 
         user = User(**validated_data, role='student')
         user.set_password(secrets.token_urlsafe(32))

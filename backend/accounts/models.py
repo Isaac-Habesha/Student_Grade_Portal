@@ -1,5 +1,5 @@
 """
-Custom User model with role-based access and auto-generated student IDs.
+Custom User model with role-based access, auto-generated student IDs, and profile images.
 """
 
 from django.contrib.auth.models import AbstractUser
@@ -9,8 +9,9 @@ from django.utils import timezone
 
 class User(AbstractUser):
     """
-    Custom user with role (student/instructor) and unique student ID.
+    Custom user with role (student/instructor), unique student ID, and Cloudinary photo URL.
     Student IDs are auto-generated in format STU-YYXXXX (e.g., STU-260001).
+    Students authenticate with their Student ID and First Name.
     """
 
     ROLE_CHOICES = [
@@ -26,11 +27,17 @@ class User(AbstractUser):
         blank=True,
         help_text="Auto-generated unique student ID (e.g., STU-260001)"
     )
+    photo_url = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="Student profile image URL (Cloudinary / CDN)"
+    )
     nickname = models.CharField(
         max_length=50,
         null=True,
         blank=True,
-        help_text="Special nickname for student authentication"
+        help_text="Optional legacy nickname field"
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -65,8 +72,11 @@ class User(AbstractUser):
         )
 
         if last_student and last_student.student_id:
-            last_number = int(last_student.student_id.split('-')[1][2:])
-            new_number = last_number + 1
+            try:
+                last_number = int(last_student.student_id.split('-')[1][2:])
+                new_number = last_number + 1
+            except (IndexError, ValueError):
+                new_number = 1
         else:
             new_number = 1
 

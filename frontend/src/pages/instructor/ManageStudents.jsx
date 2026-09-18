@@ -1,5 +1,5 @@
 /**
- * ManageStudents — for instructors to view students and create new passwordless student accounts.
+ * ManageStudents — for instructors to register and view students with Cloudinary photos and First Name login keys.
  */
 
 import { useState } from 'react';
@@ -8,11 +8,12 @@ import api from '../../api/client';
 export default function ManageStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
-    nickname: '',
+    photo_url: '',
     username: '',
     email: '',
   });
@@ -37,12 +38,28 @@ export default function ManageStudents() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleAutoSuggestNickname = () => {
-    if (form.first_name) {
-      setForm((prev) => ({
-        ...prev,
-        nickname: prev.first_name.trim(),
-      }));
+  // Handle Cloudinary photo upload
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingPhoto(true);
+    setError('');
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await api.post('/auth/upload-photo/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data?.photo_url) {
+        setForm((prev) => ({ ...prev, photo_url: res.data.photo_url }));
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to upload photo to Cloudinary.');
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -53,8 +70,8 @@ export default function ManageStudents() {
 
     try {
       const res = await api.post('/auth/students/', form);
-      setSuccess(`Student created successfully! Student ID: ${res.data.student_id} | Nickname: "${res.data.nickname}". No password required!`);
-      setForm({ first_name: '', last_name: '', nickname: '', username: '', email: '' });
+      setSuccess(`Student created successfully! Student ID: ${res.data.student_id} | Login Key: First Name "${res.data.first_name}". No password required!`);
+      setForm({ first_name: '', last_name: '', photo_url: '', username: '', email: '' });
       fetchStudents();
       setTimeout(() => setShowCreateModal(false), 3000);
     } catch (err) {
@@ -75,7 +92,7 @@ export default function ManageStudents() {
       <div className="page-header-actions">
         <div className="page-header">
           <h1 className="page-title">Manage Students</h1>
-          <p className="page-subtitle">Register and view all students (passwordless access with ID + Nickname)</p>
+          <p className="page-subtitle">Register and view all students (passwordless access with ID + First Name)</p>
         </div>
         <button className="btn btn-primary" onClick={() => { setError(''); setSuccess(''); setShowCreateModal(true); }}>
           ➕ Register New Student
@@ -95,29 +112,43 @@ export default function ManageStudents() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: '60px' }}>Photo</th>
                 <th>Student ID</th>
                 <th>Full Name</th>
-                <th>Access Nickname</th>
+                <th>Login First Name</th>
                 <th>Username</th>
                 <th>Email</th>
               </tr>
             </thead>
             <tbody>
-              {students.map((s) => (
-                <tr key={s.id}>
-                  <td><span className="badge badge-info">{s.student_id}</span></td>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-                    {s.first_name} {s.last_name}
-                  </td>
-                  <td>
-                    <span className="badge badge-success" style={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                      🔑 {s.nickname || '—'}
-                    </span>
-                  </td>
-                  <td>{s.username}</td>
-                  <td>{s.email || '—'}</td>
-                </tr>
-              ))}
+              {students.map((s) => {
+                const photo = s.photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.first_name}${s.last_name}`;
+                return (
+                  <tr key={s.id}>
+                    <td>
+                      <img
+                        src={photo}
+                        alt={s.first_name}
+                        className="student-table-avatar"
+                        onError={(e) => {
+                          e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.first_name}`;
+                        }}
+                      />
+                    </td>
+                    <td><span className="badge badge-info">{s.student_id}</span></td>
+                    <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                      {s.first_name} {s.last_name}
+                    </td>
+                    <td>
+                      <span className="badge badge-success" style={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                        🔑 {s.first_name}
+                      </span>
+                    </td>
+                    <td>{s.username}</td>
+                    <td>{s.email || '—'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -134,22 +165,55 @@ export default function ManageStudents() {
             <form onSubmit={handleCreate}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                 <div style={{ background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
-                  💡 <strong>Passwordless Flow:</strong> Students will log in using their auto-generated <strong>Student ID</strong> and this <strong>Special Nickname</strong>.
+                  💡 <strong>Passwordless Flow:</strong> Students will log in using their auto-generated <strong>Student ID</strong> and their <strong>First Name</strong>.
                 </div>
 
                 {error && <div className="alert alert-error"><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre></div>}
                 {success && <div className="alert alert-success">{success}</div>}
 
+                {/* Photo Upload / Preview Section */}
+                <div className="form-group">
+                  <label className="form-label">Student Photo (Cloudinary)</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                    <div className="photo-preview-circle">
+                      <img
+                        src={form.photo_url || (form.first_name ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${form.first_name}` : 'https://api.dicebear.com/7.x/avataaars/svg?seed=new')}
+                        alt="Preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                      <label className="btn btn-secondary" style={{ cursor: 'pointer', textAlign: 'center', fontSize: 'var(--font-size-xs)' }}>
+                        {uploadingPhoto ? '⏳ Uploading to Cloudinary...' : '📁 Upload Photo (Cloudinary)'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={handlePhotoUpload}
+                          disabled={uploadingPhoto}
+                        />
+                      </label>
+                      <input
+                        className="form-input"
+                        name="photo_url"
+                        placeholder="Or paste Cloudinary / image URL"
+                        value={form.photo_url}
+                        onChange={handleChange}
+                        style={{ fontSize: 'var(--font-size-xs)' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">First Name *</label>
+                    <label className="form-label">First Name * (Student's Login Key)</label>
                     <input
                       className="form-input"
                       name="first_name"
                       placeholder="e.g. Maya"
                       value={form.first_name}
                       onChange={handleChange}
-                      onBlur={handleAutoSuggestNickname}
                       required
                       autoFocus
                     />
@@ -164,30 +228,6 @@ export default function ManageStudents() {
                       onChange={handleChange}
                       required
                     />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Special Nickname * (Student's login key)</label>
-                  <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    <input
-                      className="form-input"
-                      name="nickname"
-                      placeholder="e.g. Maya or Star"
-                      value={form.nickname}
-                      onChange={handleChange}
-                      required
-                    />
-                    {form.first_name && !form.nickname && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ whiteSpace: 'nowrap', fontSize: 'var(--font-size-xs)' }}
-                        onClick={() => setForm((p) => ({ ...p, nickname: p.first_name }))}
-                      >
-                        Use First Name
-                      </button>
-                    )}
                   </div>
                 </div>
 
@@ -217,7 +257,9 @@ export default function ManageStudents() {
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Register Student</button>
+                <button type="submit" className="btn btn-primary" disabled={uploadingPhoto}>
+                  {uploadingPhoto ? 'Uploading Photo...' : 'Register Student'}
+                </button>
               </div>
             </form>
           </div>

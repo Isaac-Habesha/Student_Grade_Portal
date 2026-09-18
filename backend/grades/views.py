@@ -241,7 +241,8 @@ class StudentCoursesView(APIView):
                 'credit_hours': enrollment.course.credit_hours,
                 'instructor_name': enrollment.course.instructor.get_full_name(),
                 'has_result': result is not None,
-                'letter_grade': result.letter_grade if result else None,
+                'rank': result.rank if result else None,
+                'total_score': result.total_score if result else None,
                 'passed': result.passed if result else None,
             })
 

@@ -51,13 +51,14 @@ class ResultSerializer(serializers.ModelSerializer):
     """Serializer for calculated results (instructor preview)."""
     student_name = serializers.SerializerMethodField()
     student_id = serializers.CharField(source='enrollment.student.student_id', read_only=True)
+    student_photo_url = serializers.CharField(source='enrollment.student.photo_url', read_only=True)
     course_code = serializers.CharField(source='enrollment.course.code', read_only=True)
     course_name = serializers.CharField(source='enrollment.course.name', read_only=True)
 
     class Meta:
         model = Result
         fields = [
-            'id', 'student_name', 'student_id', 'course_code', 'course_name',
+            'id', 'student_name', 'student_id', 'student_photo_url', 'course_code', 'course_name',
             'total_score', 'letter_grade', 'passed', 'rank',
             'is_published', 'published_at', 'calculated_at',
         ]
@@ -69,24 +70,35 @@ class ResultSerializer(serializers.ModelSerializer):
 class StudentResultSerializer(serializers.ModelSerializer):
     """
     Serializer for a student viewing their own result.
-    Includes per-component grade breakdown.
+    Includes student identity, photo, rank standing, and component grade breakdown.
     """
+    student_name = serializers.SerializerMethodField()
+    student_id = serializers.CharField(source='enrollment.student.student_id', read_only=True)
+    student_photo_url = serializers.CharField(source='enrollment.student.photo_url', read_only=True)
     course_code = serializers.CharField(source='enrollment.course.code', read_only=True)
     course_name = serializers.CharField(source='enrollment.course.name', read_only=True)
     credit_hours = serializers.IntegerField(source='enrollment.course.credit_hours', read_only=True)
     instructor_name = serializers.SerializerMethodField()
+    total_enrolled = serializers.SerializerMethodField()
     grade_breakdown = serializers.SerializerMethodField()
 
     class Meta:
         model = Result
         fields = [
-            'id', 'course_code', 'course_name', 'credit_hours', 'instructor_name',
-            'total_score', 'letter_grade', 'passed', 'rank',
+            'id', 'student_name', 'student_id', 'student_photo_url',
+            'course_code', 'course_name', 'credit_hours', 'instructor_name',
+            'total_score', 'passed', 'rank', 'total_enrolled',
             'grade_breakdown', 'published_at',
         ]
 
+    def get_student_name(self, obj):
+        return obj.enrollment.student.get_full_name()
+
     def get_instructor_name(self, obj):
         return obj.enrollment.course.instructor.get_full_name()
+
+    def get_total_enrolled(self, obj):
+        return Result.objects.filter(enrollment__course=obj.enrollment.course, is_published=True).count()
 
     def get_grade_breakdown(self, obj):
         """Return per-component scores for the student."""

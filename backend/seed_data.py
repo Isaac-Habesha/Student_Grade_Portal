@@ -1,6 +1,6 @@
 """
 Seed the database with test data for development.
-Creates instructor, students, courses, enrollments, grade components, and sample grades.
+Creates instructor, students, courses, enrollments, grade components, sample grades, and calculates/publishes CS101 results.
 
 Usage: python manage.py shell < seed_data.py
 """
@@ -11,9 +11,12 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from decimal import Decimal
+import secrets
+import random
 from accounts.models import User
 from courses.models import Course, Enrollment, GradeComponent
 from grades.models import StudentGrade, Result
+from grades.services import calculate_course_results, publish_course_results
 
 print("=" * 60)
 print("  Seeding Student Grade Portal Database")
@@ -73,37 +76,83 @@ for data in instructors_data:
         print(f"· Instructor {instructor.username} already exists")
     instructors.append(instructor)
 
-# ─── Create Students ─────────────────────────────────────────────────────────
-
-import secrets
+# ─── Create Students (with Profile Avatars) ───────────────────────────────────
 
 students_data = [
-    {'username': 'alice.wonder', 'email': 'alice@student.com', 'first_name': 'Alice', 'last_name': 'Wonder', 'nickname': 'Ace'},
-    {'username': 'bob.miller', 'email': 'bob@student.com', 'first_name': 'Bob', 'last_name': 'Miller', 'nickname': 'Bobby'},
-    {'username': 'charlie.davis', 'email': 'charlie@student.com', 'first_name': 'Charlie', 'last_name': 'Davis', 'nickname': 'Chuck'},
-    {'username': 'diana.ross', 'email': 'diana@student.com', 'first_name': 'Diana', 'last_name': 'Ross', 'nickname': 'Didi'},
-    {'username': 'edward.kim', 'email': 'edward@student.com', 'first_name': 'Edward', 'last_name': 'Kim', 'nickname': 'Eddie'},
-    {'username': 'fiona.chen', 'email': 'fiona@student.com', 'first_name': 'Fiona', 'last_name': 'Chen', 'nickname': 'Fifi'},
-    {'username': 'george.brown', 'email': 'george@student.com', 'first_name': 'George', 'last_name': 'Brown', 'nickname': 'Geo'},
-    {'username': 'hannah.white', 'email': 'hannah@student.com', 'first_name': 'Hannah', 'last_name': 'White', 'nickname': 'Hans'},
+    {
+        'username': 'alice.wonder',
+        'email': 'alice@student.com',
+        'first_name': 'Alice',
+        'last_name': 'Wonder',
+        'photo_url': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop&q=80',
+    },
+    {
+        'username': 'bob.miller',
+        'email': 'bob@student.com',
+        'first_name': 'Bob',
+        'last_name': 'Miller',
+        'photo_url': 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80',
+    },
+    {
+        'username': 'charlie.davis',
+        'email': 'charlie@student.com',
+        'first_name': 'Charlie',
+        'last_name': 'Davis',
+        'photo_url': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
+    },
+    {
+        'username': 'diana.ross',
+        'email': 'diana@student.com',
+        'first_name': 'Diana',
+        'last_name': 'Ross',
+        'photo_url': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+    },
+    {
+        'username': 'edward.kim',
+        'email': 'edward@student.com',
+        'first_name': 'Edward',
+        'last_name': 'Kim',
+        'photo_url': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80',
+    },
+    {
+        'username': 'fiona.chen',
+        'email': 'fiona@student.com',
+        'first_name': 'Fiona',
+        'last_name': 'Chen',
+        'photo_url': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop&q=80',
+    },
+    {
+        'username': 'george.brown',
+        'email': 'george@student.com',
+        'first_name': 'George',
+        'last_name': 'Brown',
+        'photo_url': 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=400&auto=format&fit=crop&q=80',
+    },
+    {
+        'username': 'hannah.white',
+        'email': 'hannah@student.com',
+        'first_name': 'Hannah',
+        'last_name': 'White',
+        'photo_url': 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80',
+    },
 ]
 
 students = []
 for data in students_data:
-    nickname = data.get('nickname')
+    photo = data.get('photo_url')
     student, created = User.objects.get_or_create(
         username=data['username'],
         defaults={**data, 'role': 'student'},
     )
-    if not created and student.nickname != nickname:
-        student.nickname = nickname
+    if not created and (not student.photo_url or student.photo_url != photo):
+        student.photo_url = photo
         student.save()
     if created:
         student.set_password(secrets.token_urlsafe(32))
         student.save()
-        print(f"✓ Created student: {student.get_full_name()} (ID: {student.student_id}, Nickname: {student.nickname})")
+        print(f"✓ Created student: {student.get_full_name()} (ID: {student.student_id}, First Name: {student.first_name})")
     else:
-        print(f"· Student {student.get_full_name()} already exists (ID: {student.student_id}, Nickname: {student.nickname})")
+        print(f"· Student {student.get_full_name()} already exists (ID: {student.student_id})")
     students.append(student)
 
 # ─── Create Courses ───────────────────────────────────────────────────────────
@@ -179,10 +228,6 @@ for course in courses:
 
 # ─── Enroll Students ─────────────────────────────────────────────────────────
 
-# CS101: all 8 students
-# MATH201: first 6 students
-# ENG102: last 6 students
-
 enrollment_map = {
     'CS101': students[:8],
     'MATH201': students[:6],
@@ -198,9 +243,8 @@ for course in courses:
         if created:
             print(f"  ✓ Enrolled {student.get_full_name()} in {course.code}")
 
-# ─── Enter Sample Grades (for CS101 only — to demo the full workflow) ────────
+# ─── Enter Sample Grades & Publish CS101 ─────────────────────────────────────
 
-import random
 random.seed(42)  # For reproducible test data
 
 cs101 = courses[0]
@@ -210,9 +254,8 @@ cs101_enrollments = list(Enrollment.objects.filter(course=cs101).select_related(
 print("\n--- Entering sample grades for CS101 ---")
 for enrollment in cs101_enrollments:
     for component in cs101_components:
-        # Generate a realistic random score
-        min_pct = 0.45
-        max_pct = 1.0
+        min_pct = 0.55
+        max_pct = 0.98
         score = round(float(component.max_score) * random.uniform(min_pct, max_pct), 2)
         score = Decimal(str(score))
 
@@ -224,6 +267,14 @@ for enrollment in cs101_enrollments:
         if created:
             print(f"  ✓ {enrollment.student.get_full_name()} — {component.name}: {score}/{component.max_score}")
 
+# Calculate & Publish results for CS101
+try:
+    calculate_course_results(cs101.id, instructors[0])
+    publish_course_results(cs101.id, instructors[0])
+    print("✓ Calculated and published CS101 rankings!")
+except Exception as e:
+    print(f"· Calculation note: {e}")
+
 print("\n" + "=" * 60)
 print("  Seed data complete!")
 print("=" * 60)
@@ -231,7 +282,7 @@ print("\n--- Test Accounts ---")
 print(f"  Admin:       admin / admin123")
 print(f"  Instructor:  dr.smith / instructor123")
 print(f"  Instructor:  dr.johnson / instructor123")
-print("\n--- Student Accounts (Student ID + Nickname) ---")
+print("\n--- Student Accounts (Student ID + First Name) ---")
 for s in students:
-    print(f"  Student:     {s.get_full_name():<16} ID: {s.student_id}   Nickname: {s.nickname}")
+    print(f"  Student:     {s.get_full_name():<16} ID: {s.student_id:<12} First Name: {s.first_name}")
 print()

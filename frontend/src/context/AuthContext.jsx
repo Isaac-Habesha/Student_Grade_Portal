@@ -34,10 +34,10 @@ export function AuthProvider({ children }) {
     return userData;
   };
 
-  const loginStudent = async (studentId, nickname) => {
+  const loginStudent = async (studentId, firstName) => {
     const response = await api.post('/auth/student/login/', {
       student_id: studentId,
-      nickname,
+      first_name: firstName,
     });
     return saveAuthSession(response.data);
   };
@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
   const login = async (payload, maybePassword) => {
     if (typeof payload === 'object') {
       if (payload.student_id) {
-        return loginStudent(payload.student_id, payload.nickname);
+        return loginStudent(payload.student_id, payload.first_name);
       }
       return loginInstructor(payload.username, payload.password);
     }

@@ -13,8 +13,9 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {
+    const wasInstructor = isInstructor;
     await logout();
-    navigate('/login');
+    navigate(wasInstructor ? '/instructor/login' : '/login');
   };
 
   const initials = user
